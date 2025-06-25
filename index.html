@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guess the Song</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #e0e0e0;
+        }
+
+        .main-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            /* Increased padding */
+        }
+
+        .card {
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 1.5rem;
+            /* Increased padding inside card */
+        }
+
+        .btn {
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-option {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            white-space: normal;
+            word-break: break-word;
+            min-height: 4.5rem;
+            line-height: 1.3;
+            padding: 0.75rem;
+        }
+
+        .btn-option.correct {
+            background: linear-gradient(135deg, #28a745, #218838) !important;
+            color: white !important;
+            transform: scale(1.05);
+            border-color: #28a745;
+        }
+
+        .btn-option.incorrect {
+            background: linear-gradient(135deg, #dc3545, #c82333) !important;
+            color: white !important;
+            opacity: 0.7;
+        }
+
+        #album-art {
+            animation: spin 4s linear infinite paused;
+            /* Adjusted animation time */
+            position: relative;
+            /* For the hole */
+        }
+
+        #album-art::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 16%;
+            /* Adjust size as needed */
+            height: 16%;
+            /* Adjust size as needed */
+            background-color: #333;
+            /* Dark color for the hole */
+            border-radius: 50%;
+            z-index: 1;
+            /* Ensure it's on top */
+        }
+
+        #album-art.playing {
+            animation-play-state: running;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .feedback-text {
+            height: 24px;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .difficulty-btn.selected {
+            background-color: #4c51bf;
+            color: white;
+            box-shadow: 0 0 15px rgba(76, 81, 191, 0.5);
+        }
+
+        .artist-option.selected {
+            border: 3px solid #4c51bf;
+            transform: scale(1.05);
+        }
+
+        #autocomplete-suggestions {
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.6);
+            /* More opaque background */
+            position: absolute;
+            width: calc(100% - 3rem);
+            /* Adjust based on increased padding */
+            left: 1.5rem;
+            /* Match card padding */
+            z-index: 10;
+        }
+
+        #autocomplete-suggestions div {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+        }
+
+        #autocomplete-suggestions div:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Styles for High Scores Overlay */
+        .score-list-container {
+            max-height: 300px;
+            /* Limit height for scrollability */
+            overflow-y: auto;
+        }
+
+        /* Party Mode Toggle Switch Styling */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            -webkit-transition: .4s;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            -webkit-transition: .4s;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: #4c51bf;
+        }
+
+        input:focus+.slider {
+            box-shadow: 0 0 1px #4c51bf;
+        }
+
+        input:checked+.slider:before {
+            -webkit-transform: translateX(26px);
+            -ms-transform: translateX(26px);
+            transform: translateX(26px);
+        }
+    </style>
+</head>
+
+<body class="main-container">
+
+    <div id="game-wrapper" class="w-full max-w-md mx-auto">
+
+        <!-- Settings Overlay -->
+        <div id="settings-overlay"
+            class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+            <div class="card rounded-2xl p-6 sm:p-8 w-11/12 max-w-sm relative">
+                <button id="close-settings-btn"
+                    class="absolute top-3 right-4 text-2xl text-white/80 hover:text-white">&times;</button>
+                <h2 class="text-2xl font-bold text-center mb-6">Settings</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label for="music-volume" class="block mb-1 text-sm font-semibold">Music Volume</label>
+                        <input type="range" id="music-volume" min="0" max="1" step="0.01" value="0.8"
+                            class="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    <div>
+                        <label for="sfx-volume" class="block mb-1 text-sm font-semibold">SFX Volume</label>
+                        <input type="range" id="sfx-volume" min="0" max="1" step="0.01" value="0.5"
+                            class="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- High Scores Overlay -->
+        <div id="highscores-overlay"
+            class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+            <div class="card rounded-2xl p-6 sm:p-8 w-11/12 max-w-md relative">
+                <button id="close-highscores-btn"
+                    class="absolute top-3 right-4 text-2xl text-white/80 hover:text-white">&times;</button>
+                <h2 class="text-2xl font-bold text-center mb-6">High Scores</h2>
+                <div class="score-list-container">
+                    <table class="w-full text-left table-auto">
+                        <thead>
+                            <tr class="bg-white/10">
+                                <th class="p-2 rounded-tl-lg">Score</th>
+                                <th class="p-2">Difficulty</th>
+                                <th class="p-2">Artist</th>
+                                <th class="p-2 rounded-tr-lg">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="highscores-list">
+                            <!-- High scores will be inserted here by JavaScript -->
+                        </tbody>
+                    </table>
+                    <p id="no-scores-message" class="text-center text-gray-400 mt-4 hidden">No scores yet. Play a game!
+                    </p>
+                </div>
+                <div class="flex justify-center mt-6">
+                    <button id="clear-highscores-btn"
+                        class="btn bg-red-600/80 text-white font-bold px-6 py-2 rounded-lg hover:bg-red-700">Clear
+                        Scores</button>
+                </div>
+            </div>
+        </div>
+
+
+        <div id="start-screen" class="card rounded-2xl p-6 sm:p-8 text-center shadow-lg">
+            <h1 class="text-4xl font-bold mb-4">Guess the Song</h1>
+            <p class="text-gray-300 mb-8">Enter an artist and select a difficulty.</p>
+
+            <div class="space-y-6">
+                <!-- Party Mode Toggle -->
+                <div class="flex items-center justify-center gap-4 mb-6">
+                    <span class="text-lg font-semibold">Party Mode</span>
+                    <label class="switch">
+                        <input type="checkbox" id="party-mode-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div id="artist-selection-wrapper">
+                    <!-- Wrapper to hide/show artist selection -->
+                    <div id="search-artist-section" class="artist-selection-section relative">
+                        <input type="text" id="artist-input" placeholder="e.g., Taylor Swift, Queen..."
+                            class="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-white/50">
+                        <div id="autocomplete-suggestions"
+                            class="absolute left-0 right-0 mt-1 rounded-lg shadow-lg hidden">
+                        </div>
+                    </div>
+                    <p id="selected-artist-display" class="text-white text-lg font-semibold mt-4 h-5"></p>
+                </div>
+
+                <p id="party-mode-active-display" class="text-white text-lg font-semibold mt-4 h-5 hidden">Party Mode
+                    Active!
+                </p>
+
+                <div id="difficulty-selection" class="flex justify-center gap-4 mt-8">
+                    <button class="difficulty-btn btn bg-white/30 px-5 py-2.5 rounded-lg"
+                        data-difficulty="easy">Easy</button>
+                    <button class="difficulty-btn btn bg-white/30 px-5 py-2.5 rounded-lg selected"
+                        data-difficulty="medium">Medium</button>
+                    <button class="difficulty-btn btn bg-white/30 px-5 py-2.5 rounded-lg"
+                        data-difficulty="hard">Hard</button>
+                </div>
+                <button id="start-btn"
+                    class="btn w-full bg-white/90 text-[#764ba2] font-bold px-6 py-3 rounded-lg hover:bg-white mt-8">Start
+                    Game</button>
+                <!-- New High Scores Button -->
+                <button id="show-highscores-btn"
+                    class="btn w-full bg-white/30 text-white font-bold px-6 py-3 rounded-lg hover:bg-white/40 mt-4">High
+                    Scores</button>
+                <p id="start-error" class="text-red-400 mt-2 h-5"></p>
+            </div>
+        </div>
+
+        <div id="game-screen" class="hidden h-full flex flex-col">
+            <header id="game-header" class="grid grid-cols-3 items-center w-full mb-6 text-base sm:text-lg">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <button id="back-btn" class="btn text-2xl text-white/80 hover:text-white transition"><i
+                            class="fas fa-arrow-left"></i></button>
+                    <span>Score: <span id="score" class="font-bold">0</span></span>
+                </div>
+                <div class="text-center font-bold">
+                    <span id="songs-progress">1/15</span>
+                </div>
+                <div class="flex items-center justify-end gap-3 sm:gap-4">
+                    <span>Time: <span id="timer" class="font-bold">10</span>s</span>
+                    <button id="settings-btn" class="btn text-2xl text-white/80 hover:text-white transition z-40"><i
+                            class="fas fa-cog"></i></button>
+                </div>
+            </header>
+
+            <main class="flex-grow flex flex-col items-center justify-center">
+                <div class="flex justify-center mb-8">
+                    <img id="album-art" src="https://placehold.co/250x250/764ba2/ffffff?text=?"
+                        class="w-48 h-48 sm:w-56 sm:h-56 object-cover rounded-full shadow-2xl" alt="Album Art">
+                </div>
+                <div id="feedback-text" class="feedback-text text-center text-xl font-bold mb-6"></div>
+            </main>
+
+            <footer id="options-container" class="grid grid-cols-2 gap-4 mb-6"></footer>
+            <audio id="audio-player"></audio>
+        </div>
+
+        <div id="end-screen" class="card rounded-2xl p-8 text-center shadow-lg hidden">
+            <h2 class="text-3xl font-bold mb-4">Game Over!</h2>
+            <p class="text-xl mb-8">Your final score is <span id="final-score" class="font-bold">0</span>.</p>
+            <button id="restart-btn"
+                class="btn bg-white/90 text-[#764ba2] font-bold px-8 py-3 rounded-lg hover:bg-white">Play
+                Again</button>
+        </div>
+    </div>
+
+    <audio id="sfx-correct" src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3"
+        preload="auto"></audio>
+    <audio id="sfx-wrong" src="https://assets.mixkit.co/sfx/preview/mixkit-wrong-answer-fail-notification-946.mp3"
+        preload="auto"></audio>
+
+    <script>
+        // DOM Elements
+        const settingsBtn = document.getElementById('settings-btn');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const settingsOverlay = document.getElementById('settings-overlay');
+        const musicVolumeSlider = document.getElementById('music-volume');
+        const sfxVolumeSlider = document.getElementById('sfx-volume');
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const endScreen = document.getElementById('end-screen');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const backBtn = document.getElementById('back-btn');
+        const artistInput = document.getElementById('artist-input');
+        const scoreEl = document.getElementById('score');
+        const songsProgressEl = document.getElementById('songs-progress');
+        const timerEl = document.getElementById('timer');
+        const albumArtEl = document.getElementById('album-art');
+        const optionsContainer = document.getElementById('options-container');
+        const audioPlayer = document.getElementById('audio-player');
+        const finalScoreEl = document.getElementById('final-score');
+        const startError = document.getElementById('start-error');
+        const feedbackText = document.getElementById('feedback-text');
+        const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+        const sfxCorrect = document.getElementById('sfx-correct');
+        const sfxWrong = document.getElementById('sfx-wrong');
+
+        // Artist Selection DOM elements
+        const artistSelectionWrapper = document.getElementById('artist-selection-wrapper'); // New wrapper for artist input
+        const autocompleteSuggestions = document.getElementById('autocomplete-suggestions');
+        const selectedArtistDisplay = document.getElementById('selected-artist-display');
+
+        // High Scores DOM elements
+        const showHighscoresBtn = document.getElementById('show-highscores-btn');
+        const highscoresOverlay = document.getElementById('highscores-overlay');
+        const closeHighscoresBtn = document.getElementById('close-highscores-btn');
+        const highscoresList = document.getElementById('highscores-list');
+        const noScoresMessage = document.getElementById('no-scores-message');
+        const clearHighscoresBtn = document.getElementById('clear-highscores-btn');
+
+        // Party Mode DOM elements
+        const partyModeToggle = document.getElementById('party-mode-toggle');
+        const partyModeActiveDisplay = document.getElementById('party-mode-active-display');
+
+
+        // Game State & Settings
+        let songs = [];
+        let score = 0;
+        let currentSongIndex = 0;
+        let correctAnswer = '';
+        let timerInterval;
+        let difficulty = 'medium'; // Default difficulty
+        let selectedArtist = ''; // Stores the artist chosen by any method
+        let currentTimerValue = 0; // To store the time left when answered correctly
+        let isPartyMode = false; // New state variable for Party Mode
+        let allCsvSongs = []; // To store songs loaded from CSV
+
+        const gameSettings = {
+            easy: { songs: 10, time: 15, baseScore: 100 },
+            medium: { songs: 15, time: 10, baseScore: 200 },
+            hard: { songs: 20, time: 5, baseScore: 300 }
+        };
+
+        // --- Artist Selection Logic ---
+        function selectArtist(artistName) {
+            selectedArtist = artistName;
+            selectedArtistDisplay.textContent = `Selected Artist: ${selectedArtist}`;
+        }
+
+        // Auto-Complete Search
+        let autocompleteTimeout;
+        artistInput.addEventListener('input', () => {
+            clearTimeout(autocompleteTimeout);
+            const searchTerm = artistInput.value.trim();
+            if (searchTerm.length < 2) {
+                autocompleteSuggestions.innerHTML = '';
+                autocompleteSuggestions.classList.add('hidden');
+                selectedArtist = ''; // Clear selected artist if input is too short
+                selectedArtistDisplay.textContent = '';
+                return;
+            }
+            autocompleteTimeout = setTimeout(() => fetchArtistSuggestions(searchTerm), 300);
+        });
+
+        artistInput.addEventListener('focus', () => {
+            // Only show suggestions if not in party mode and input has content
+            if (!isPartyMode && autocompleteSuggestions.children.length > 0 && artistInput.value.trim().length >= 2) {
+                autocompleteSuggestions.classList.remove('hidden');
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!artistInput.contains(event.target) && !autocompleteSuggestions.contains(event.target)) {
+                autocompleteSuggestions.classList.add('hidden');
+            }
+        });
+
+
+        async function fetchArtistSuggestions(term) {
+            try {
+                // Fetch artist suggestions from iTunes API
+                const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=musicArtist&limit=7`);
+                if (!response.ok) throw new Error('Network response failed for suggestions.');
+                const data = await response.json();
+                displayArtistSuggestions(data.results);
+            } catch (error) {
+                console.error('Failed to fetch artist suggestions:', error);
+                autocompleteSuggestions.innerHTML = '<div class="text-red-300 p-2">Error fetching suggestions.</div>';
+                autocompleteSuggestions.classList.remove('hidden');
+            }
+        }
+
+        function displayArtistSuggestions(artists) {
+            autocompleteSuggestions.innerHTML = '';
+            if (artists.length === 0) {
+                autocompleteSuggestions.classList.add('hidden');
+                return;
+            }
+            artists.forEach(artist => {
+                const suggestionDiv = document.createElement('div');
+                suggestionDiv.textContent = artist.artistName;
+                suggestionDiv.classList.add('hover:bg-white/20', 'p-2', 'cursor-pointer');
+                suggestionDiv.addEventListener('click', () => {
+                    artistInput.value = artist.artistName;
+                    selectArtist(artist.artistName);
+                    autocompleteSuggestions.classList.add('hidden');
+                });
+                autocompleteSuggestions.appendChild(suggestionDiv);
+            });
+            autocompleteSuggestions.classList.remove('hidden');
+        }
+
+
+        // --- Game Core Logic ---
+        // Event Listeners
+        settingsBtn.addEventListener('click', () => settingsOverlay.classList.remove('hidden'));
+        closeSettingsBtn.addEventListener('click', () => settingsOverlay.classList.add('hidden'));
+        musicVolumeSlider.addEventListener('input', (e) => audioPlayer.volume = e.target.value);
+        sfxVolumeSlider.addEventListener('input', (e) => {
+            sfxCorrect.volume = e.target.value;
+            sfxWrong.volume = e.target.value;
+        });
+
+        // High Scores Event Listeners
+        showHighscoresBtn.addEventListener('click', () => {
+            displayHighScores(); // Load and display scores when the overlay is shown
+            highscoresOverlay.classList.remove('hidden');
+        });
+        closeHighscoresBtn.addEventListener('click', () => highscoresOverlay.classList.add('hidden'));
+        clearHighscoresBtn.addEventListener('click', () => {
+            localStorage.removeItem('songGuessHighScores');
+            displayHighScores(); // Re-render the empty list
+        });
+
+        // Party Mode Toggle Event Listener
+        partyModeToggle.addEventListener('change', (e) => {
+            isPartyMode = e.target.checked;
+            togglePartyModeUI(isPartyMode);
+        });
+
+        difficultyButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                difficultyButtons.forEach(btn => btn.classList.remove('selected'));
+                button.classList.add('selected');
+                difficulty = button.dataset.difficulty; // Update the global difficulty state
+            });
+        });
+
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', backToStart);
+        backBtn.addEventListener('click', backToStart);
+
+        function backToStart() {
+            clearInterval(timerInterval);
+            audioPlayer.pause();
+            albumArtEl.classList.remove('playing');
+            gameScreen.classList.add('hidden');
+            endScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+
+            // Reset artist selection and party mode UI
+            selectedArtist = '';
+            artistInput.value = '';
+            autocompleteSuggestions.innerHTML = '';
+            autocompleteSuggestions.classList.add('hidden');
+            partyModeToggle.checked = false; // Ensure toggle is off
+            isPartyMode = false;
+            togglePartyModeUI(false); // Reset UI to artist selection mode
+
+            score = 0; // Reset score for new game
+            currentSongIndex = 0; // Reset song index
+            difficulty = 'medium'; // Reset difficulty to default
+            // Reset difficulty button selection
+            difficultyButtons.forEach(btn => btn.classList.remove('selected'));
+            document.querySelector('.difficulty-btn[data-difficulty="medium"]').classList.add('selected');
+        }
+
+        async function startGame() {
+            startBtn.disabled = true;
+            startBtn.textContent = 'Loading...';
+            startError.textContent = '';
+
+            let success = false;
+            if (isPartyMode) {
+                // Party Mode: Use songs from CSV
+                if (allCsvSongs.length === 0) {
+                    startError.textContent = "Party Mode songs not loaded. Please try again or switch to Artist mode.";
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Start Game';
+                    return;
+                }
+                selectedArtist = 'Various Artists (Party Mode)'; // Set a default artist for scores
+                // Randomly select required number of songs from allCsvSongs
+                songs = allCsvSongs.sort(() => 0.5 - Math.random()).slice(0, gameSettings[difficulty].songs);
+
+                if (songs.length < gameSettings[difficulty].songs) {
+                    console.warn(`Could only find ${songs.length} songs from CSV for Party Mode. Playing with this amount.`);
+                }
+                success = songs.length > 0; // Game can start if at least one song is available
+
+            } else {
+                // Manual Artist Selection: Use iTunes API
+                const artistToUse = selectedArtist;
+                if (!artistToUse) {
+                    startError.textContent = "Please enter an artist's name and select from suggestions.";
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Start Game';
+                    return;
+                }
+                success = await fetchSongs(artistToUse); // Existing iTunes API fetch
+            }
+
+            if (success) {
+                score = 0; // Reset score for new game
+                currentSongIndex = 0; // Reset song index
+                scoreEl.textContent = '0';
+                startScreen.classList.add('hidden');
+                gameScreen.classList.remove('hidden');
+                nextRound();
+            }
+            startBtn.disabled = false;
+            startBtn.textContent = 'Start Game';
+        }
+
+        async function fetchSongs(artistName) {
+            try {
+                // Get required songs based on the selected difficulty
+                const requiredSongs = gameSettings[difficulty].songs;
+                // Fetch more results to ensure enough diverse songs after filtering
+                const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=song&attribute=artistTerm&limit=${requiredSongs * 5}`);
+                if (!response.ok) throw new Error('Network response failed.');
+
+                const data = await response.json();
+                const normalizedArtistName = artistName.toLowerCase();
+
+                // Strict filter for artist name and ensure preview URL exists
+                const artistSongs = data.results.filter(song =>
+                    song.artistName.toLowerCase() === normalizedArtistName && song.previewUrl
+                );
+
+                if (artistSongs.length < 4) { // Need at least 4 for options + correct
+                    throw new Error(`Not enough songs found for "${artistName}". Try another artist.`);
+                }
+
+                // Randomize and take the required number of songs
+                songs = artistSongs.sort(() => 0.5 - Math.random()).slice(0, requiredSongs);
+
+                if (songs.length < requiredSongs) {
+                    console.warn(`Could only find ${songs.length} songs for "${artistName}". Playing with this amount.`);
+                }
+                return true;
+            } catch (error) {
+                console.error('Failed to fetch songs:', error);
+                startError.textContent = error.message;
+                return false;
+            }
+        }
+
+        // Function to parse CSV data into an array of song objects
+        function parseCsvData(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim() !== '');
+            if (lines.length === 0) {
+                console.warn("CSV data is empty.");
+                return [];
+            }
+
+            // Dynamically get headers from the first line of the CSV
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+            // Map header names to their respective indices
+            const headerMap = {};
+            headers.forEach((header, index) => {
+                headerMap[header] = index;
+            });
+
+            // Define the expected columns based on CSV content: trackName, artistName, previewUrl
+            const trackNameIndex = headerMap['trackName'];
+            const artistNameIndex = headerMap['artistName'];
+            const previewUrlIndex = headerMap['previewUrl'];
+            const artworkUrlIndex = headerMap['artworkUrl100']; // Check if artwork URL exists
+
+            if (trackNameIndex === undefined || artistNameIndex === undefined || previewUrlIndex === undefined) {
+                console.error("CSV must contain 'trackName', 'artistName', and 'previewUrl' columns.");
+                return [];
+            }
+
+            const parsedSongs = [];
+            for (let i = 1; i < lines.length; i++) {
+                // A more robust split to handle commas within quoted fields
+                const values = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                // Remove leading/trailing quotes from values
+                const cleanValues = values.map(v => v.trim().replace(/^"|"$/g, ''));
+
+                const trackName = cleanValues[trackNameIndex];
+                const artistName = cleanValues[artistNameIndex];
+                let previewUrl = cleanValues[previewUrlIndex];
+                // Use actual artworkUrl100 if present, otherwise fall back to a placeholder
+                const artworkUrl100 = artworkUrlIndex !== undefined && cleanValues[artworkUrlIndex] ?
+                    cleanValues[artworkUrlIndex] :
+                    `https://placehold.co/100x100/764ba2/ffffff?text=${encodeURIComponent(artistName ? artistName[0] : '?')}`;
+
+                // Basic validation for previewUrl. If missing or not a valid URL, set a placeholder.
+                if (!previewUrl || !previewUrl.startsWith('http')) {
+                    console.warn(`Missing or invalid previewUrl for song: ${trackName} by ${artistName} from CSV. Using a blank audio placeholder.`);
+                    previewUrl = 'data:audio/mpeg;base64,'; // A blank base64 audio string to avoid errors
+                }
+
+                if (trackName && artistName) { // Ensure essential data exists
+                    parsedSongs.push({
+                        trackName: trackName,
+                        artistName: artistName,
+                        previewUrl: previewUrl,
+                        artworkUrl100: artworkUrl100
+                    });
+                }
+            }
+            return parsedSongs;
+        }
+
+        // Function to load all songs from the local CSV file
+        async function loadAllCsvSongs() {
+            try {
+                const response = await fetch('apple_music_dataset.csv'); // Fetch the local CSV file
+                if (!response.ok) {
+                    throw new Error(`Failed to load CSV: ${response.statusText}`);
+                }
+                const csvText = await response.text();
+                allCsvSongs = parseCsvData(csvText);
+                console.log(`Loaded ${allCsvSongs.length} songs from CSV.`);
+                if (allCsvSongs.length === 0) {
+                    startError.textContent = "Could not load any songs from the CSV file. Party Mode will not work.";
+                    partyModeToggle.disabled = true; // Disable party mode if no songs loaded
+                } else {
+                    partyModeToggle.disabled = false; // Enable if songs loaded
+                    startError.textContent = ""; // Clear error if songs are loaded successfully
+                }
+            } catch (error) {
+                console.error('Error loading CSV songs:', error);
+                startError.textContent = `Error loading songs for Party Mode: ${error.message}.`;
+                partyModeToggle.disabled = true; // Disable party mode on error
+            }
+        }
+
+        // Function to update UI elements based on Party Mode state
+        function togglePartyModeUI(isPartyModeOn) {
+            if (isPartyModeOn) {
+                artistSelectionWrapper.classList.add('hidden'); // Hide the entire artist selection area
+                partyModeActiveDisplay.classList.remove('hidden'); // Show Party Mode active message
+                artistInput.value = ''; // Clear artist input
+                selectedArtistDisplay.textContent = ''; // Clear selected artist display
+                autocompleteSuggestions.innerHTML = ''; // Clear suggestions
+                autocompleteSuggestions.classList.add('hidden');
+                startError.textContent = ''; // Clear any previous artist-related errors
+            } else {
+                artistSelectionWrapper.classList.remove('hidden'); // Show artist selection area
+                partyModeActiveDisplay.classList.add('hidden'); // Hide Party Mode active message
+            }
+        }
+
+        function nextRound() {
+            // Check if all songs for the current difficulty have been played
+            if (currentSongIndex >= songs.length) {
+                setTimeout(endGame, 500); // End game after a short delay
+                return;
+            }
+
+            // Clear previous feedback and options
+            feedbackText.textContent = '';
+            optionsContainer.innerHTML = '';
+            albumArtEl.classList.remove('playing');
+
+            // Update songs progress display
+            songsProgressEl.textContent = `${currentSongIndex + 1}/${songs.length}`;
+
+            // Get the current song and its correct answer
+            const currentSong = songs[currentSongIndex];
+            correctAnswer = currentSong.trackName;
+
+            // Set audio player source and update album art
+            audioPlayer.src = currentSong.previewUrl;
+            // Get a higher resolution album artwork (or use placeholder for CSV songs)
+            const artwork = currentSong.artworkUrl100 ? currentSong.artworkUrl100.replace('100x100bb.jpg', '300x300bb.jpg') : `https://placehold.co/300x300/764ba2/ffffff?text=${encodeURIComponent(currentSong.artistName)}`;
+            albumArtEl.src = artwork;
+
+            // Generate and display answer options
+            const options = generateOptions(currentSong);
+            options.forEach(option => {
+                const button = document.createElement('button');
+                button.textContent = option;
+                button.classList.add('btn', 'btn-option', 'w-full', 'rounded-lg', 'bg-white/20');
+                button.onclick = handleAnswerClick;
+                optionsContainer.appendChild(button);
+            });
+
+            // Play audio and start timer once audio is ready
+            audioPlayer.oncanplaythrough = () => {
+                // Only play if the game screen is active (prevents playing during transition)
+                if (!gameScreen.classList.contains('hidden')) {
+                    audioPlayer.play();
+                    albumArtEl.classList.add('playing');
+                    startTimer();
+                }
+            };
+            audioPlayer.load(); // Important for iOS devices to pre-load the audio
+        }
+
+        function generateOptions(correctSong) {
+            const options = new Set([correctSong.trackName]); // Start with the correct answer
+            // Filter out songs by the same artist for more challenging options
+            // If in Party Mode, select from allCsvSongs, otherwise from iTunes fetched songs
+            const poolToDrawFrom = isPartyMode ? allCsvSongs : songs;
+            const songPool = poolToDrawFrom.filter(s => s.trackName !== correctSong.trackName && s.artistName !== correctSong.artistName);
+
+            // If not enough diverse songs, fall back to any other song
+            if (songPool.length < 3) { // We need 3 incorrect options to make 4 total options
+                const broaderPool = poolToDrawFrom.filter(s => s.trackName !== correctSong.trackName); // All other songs
+                while (options.size < 4 && broaderPool.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * broaderPool.length);
+                    options.add(broaderPool[randomIndex].trackName);
+                    broaderPool.splice(randomIndex, 1); // Remove added song from pool
+                }
+            } else {
+                while (options.size < 4 && songPool.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * songPool.length);
+                    options.add(songPool[randomIndex].trackName);
+                    songPool.splice(randomIndex, 1); // Remove added song from pool
+                }
+            }
+            return Array.from(options).sort(() => 0.5 - Math.random()); // Convert to array and randomize order
+        }
+
+        function handleAnswerClick(e) {
+            handleAnswer(e.target.textContent, e.target);
+        }
+
+        function handleAnswer(selectedAnswer, selectedButton) {
+            clearInterval(timerInterval); // Stop the timer
+            audioPlayer.pause(); // Pause the music
+            albumArtEl.classList.remove('playing'); // Stop album art animation
+
+            // Disable all option buttons to prevent multiple clicks
+            const allButtons = optionsContainer.querySelectorAll('button');
+            allButtons.forEach(button => button.disabled = true);
+
+            if (selectedAnswer === correctAnswer) {
+                selectedButton.classList.add('correct'); // Highlight correct choice
+                feedbackText.textContent = "Correct!";
+                feedbackText.classList.remove('text-red-400');
+                feedbackText.classList.add('text-green-400');
+
+                // Calculate points based on difficulty and time left
+                const baseScore = gameSettings[difficulty].baseScore;
+                const timeLeftBonus = currentTimerValue * 10; // 10 points per second left
+                const roundScore = baseScore + timeLeftBonus;
+                score += roundScore; // Add to total score
+
+                scoreEl.textContent = score; // Update score display
+                sfxCorrect.play(); // Play correct SFX
+            } else {
+                if (selectedButton) selectedButton.classList.add('incorrect'); // Highlight incorrect choice
+                feedbackText.textContent = selectedAnswer ? "Wrong!" : "Time's up!"; // Set feedback message
+                feedbackText.classList.remove('text-green-400');
+                feedbackText.classList.add('text-red-400');
+                // Highlight the correct answer if the user was wrong or timed out
+                allButtons.forEach(button => {
+                    if (button.textContent === correctAnswer) button.classList.add('correct');
+                });
+                sfxWrong.play(); // Play wrong SFX
+            }
+
+            currentSongIndex++; // Move to the next song
+            setTimeout(nextRound, 2000); // Proceed to the next round after a delay
+        }
+
+        function startTimer() {
+            let timeLeft = gameSettings[difficulty].time; // Get time based on difficulty
+            timerEl.textContent = timeLeft;
+            currentTimerValue = timeLeft; // Initialize current timer value
+            clearInterval(timerInterval); // Clear any existing timer
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                currentTimerValue = timeLeft; // Update current timer value
+                timerEl.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    handleAnswer(null, null); // Time's up, handle as incorrect answer
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            gameScreen.classList.add('hidden'); // Hide game screen
+            endScreen.classList.remove('hidden'); // Show end screen
+            finalScoreEl.textContent = score; // Display final score
+
+            // Save the score if it's not 0 (meaning at least one correct answer)
+            // and an artist was selected/set (e.g., "Various Artists (Party Mode)")
+            if (score > 0 && selectedArtist) {
+                saveScore({
+                    score: score,
+                    difficulty: difficulty,
+                    artist: selectedArtist,
+                    date: new Date().toLocaleDateString() // Or toLocaleString() for time
+                });
+            }
+        }
+
+        // --- High Score Logic ---
+        function saveScore(scoreData) {
+            try {
+                const scores = loadScores(); // Load existing scores
+                scores.push(scoreData); // Add new score
+                // Sort scores from highest to lowest
+                scores.sort((a, b) => b.score - a.score);
+                // Keep only the top 10 scores (optional, adjust as needed)
+                const topScores = scores.slice(0, 10);
+                localStorage.setItem('songGuessHighScores', JSON.stringify(topScores));
+            } catch (e) {
+                console.error("Failed to save score to local storage:", e);
+            }
+        }
+
+        function loadScores() {
+            try {
+                const scoresString = localStorage.getItem('songGuessHighScores');
+                return scoresString ? JSON.parse(scoresString) : [];
+            } catch (e) {
+                console.error("Failed to load scores from local storage:", e);
+                return [];
+            }
+        }
+
+        function displayHighScores() {
+            const scores = loadScores();
+            highscoresList.innerHTML = ''; // Clear previous entries
+            if (scores.length === 0) {
+                noScoresMessage.classList.remove('hidden');
+            } else {
+                noScoresMessage.classList.add('hidden');
+                scores.forEach((s, index) => {
+                    const row = document.createElement('tr');
+                    row.classList.add('border-b', 'border-white/10', 'last:border-b-0'); // Add border for separation
+                    row.innerHTML = `
+                        <td class="p-2">${s.score}</td>
+                        <td class="p-2">${s.difficulty.charAt(0).toUpperCase() + s.difficulty.slice(1)}</td>
+                        <td class="p-2">${s.artist}</td>
+                        <td class="p-2">${s.date}</td>
+                    `;
+                    highscoresList.appendChild(row);
+                });
+            }
+        }
+
+        // Initial game setup: set initial volumes and default difficulty button
+        audioPlayer.volume = musicVolumeSlider.value;
+        sfxCorrect.volume = sfxVolumeSlider.value;
+        sfxWrong.volume = sfxVolumeSlider.value;
+        // Ensure the medium difficulty button is selected on load
+        document.querySelector('.difficulty-btn[data-difficulty="medium"]').classList.add('selected');
+
+        // Load CSV songs on startup (for Party Mode)
+        loadAllCsvSongs();
+        // Set initial UI based on party mode state (off by default)
+        togglePartyModeUI(isPartyMode);
+
+        // Initial display of high scores (optional, but good for first load)
+        displayHighScores();
+    </script>
+</body>
+
+</html>
