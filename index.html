@@ -209,6 +209,12 @@
             -ms-transform: translateX(26px);
             transform: translateX(26px);
         }
+
+        /* Song Info Overlay Styles */
+        #song-info-overlay {
+            z-index: 60;
+            /* Higher than other overlays */
+        }
     </style>
 </head>
 
@@ -267,6 +273,20 @@
                         class="btn bg-red-600/80 text-white font-bold px-6 py-2 rounded-lg hover:bg-red-700">Clear
                         Scores</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Song Info Overlay (New) -->
+        <div id="song-info-overlay"
+            class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center hidden">
+            <div class="card rounded-2xl p-6 sm:p-8 w-11/12 max-w-sm text-center">
+                <p id="info-feedback-text" class="text-3xl font-bold mb-4"></p>
+                <p class="text-xl mb-2">The song was:</p>
+                <p id="info-song-title" class="text-2xl font-bold mb-2"></p>
+                <p id="info-artist-name" class="text-lg text-gray-300 mb-6"></p>
+                <button id="next-song-btn"
+                    class="btn bg-white/90 text-[#764ba2] font-bold px-8 py-3 rounded-lg hover:bg-white">Next
+                    Song</button>
             </div>
         </div>
 
@@ -391,7 +411,7 @@
         const sfxWrong = document.getElementById('sfx-wrong');
 
         // Artist Selection DOM elements
-        const artistSelectionWrapper = document.getElementById('artist-selection-wrapper'); // New wrapper for artist input
+        const artistSelectionWrapper = document.getElementById('artist-selection-wrapper');
         const autocompleteSuggestions = document.getElementById('autocomplete-suggestions');
         const selectedArtistDisplay = document.getElementById('selected-artist-display');
 
@@ -407,15 +427,23 @@
         const partyModeToggle = document.getElementById('party-mode-toggle');
         const partyModeActiveDisplay = document.getElementById('party-mode-active-display');
 
+        // Song Info Overlay DOM elements (New)
+        const songInfoOverlay = document.getElementById('song-info-overlay');
+        const infoFeedbackText = document.getElementById('info-feedback-text');
+        const infoSongTitle = document.getElementById('info-song-title');
+        const infoArtistName = document.getElementById('info-artist-name');
+        const nextSongBtn = document.getElementById('next-song-btn');
+
 
         // Game State & Settings
         let songs = [];
         let score = 0;
         let currentSongIndex = 0;
         let correctAnswer = '';
+        let correctArtist = ''; // Store the correct artist for the overlay
         let timerInterval;
         let difficulty = 'medium'; // Default difficulty
-        let selectedArtist = ''; // Stores the artist chosen by any method
+        let selectedArtist = ''; // Stores the artist chosen by any method (or 'Party Mode')
         let currentTimerValue = 0; // To store the time left when answered correctly
         let isPartyMode = false; // New state variable for Party Mode
         let allCsvSongs = []; // To store songs loaded from CSV
@@ -523,6 +551,14 @@
             togglePartyModeUI(isPartyMode);
         });
 
+        // Next Song Button Listener on Info Overlay (New)
+        nextSongBtn.addEventListener('click', () => {
+            console.log('Next Song button clicked. Current Song Index BEFORE nextRound():', currentSongIndex); // Debugging log
+            songInfoOverlay.classList.add('hidden'); // Hide the info overlay
+            nextRound(); // Proceed to the next round
+        });
+
+
         difficultyButtons.forEach(button => {
             button.addEventListener('click', () => {
                 difficultyButtons.forEach(btn => btn.classList.remove('selected'));
@@ -536,12 +572,14 @@
         backBtn.addEventListener('click', backToStart);
 
         function backToStart() {
+            console.log('backToStart() called. Resetting game state.'); // Debugging log
             clearInterval(timerInterval);
             audioPlayer.pause();
             albumArtEl.classList.remove('playing');
             gameScreen.classList.add('hidden');
             endScreen.classList.add('hidden');
             startScreen.classList.remove('hidden');
+            songInfoOverlay.classList.add('hidden'); // Ensure info overlay is hidden on back
 
             // Reset artist selection and party mode UI
             selectedArtist = '';
@@ -553,7 +591,7 @@
             togglePartyModeUI(false); // Reset UI to artist selection mode
 
             score = 0; // Reset score for new game
-            currentSongIndex = 0; // Reset song index
+            currentSongIndex = 0; // Reset song index -- THIS IS THE CULPRIT IF CALLED UNINTENTIONALLY
             difficulty = 'medium'; // Reset difficulty to default
             // Reset difficulty button selection
             difficultyButtons.forEach(btn => btn.classList.remove('selected'));
@@ -564,6 +602,7 @@
             startBtn.disabled = true;
             startBtn.textContent = 'Loading...';
             startError.textContent = '';
+            console.log('startGame() called. Initializing game state.'); // Debugging log
 
             let success = false;
             if (isPartyMode) {
@@ -659,10 +698,11 @@
             });
 
             // Define the expected columns based on CSV content: trackName, artistName, previewUrl
+            // Using the exact column names from your provided CSV
             const trackNameIndex = headerMap['trackName'];
             const artistNameIndex = headerMap['artistName'];
             const previewUrlIndex = headerMap['previewUrl'];
-            const artworkUrlIndex = headerMap['artworkUrl100']; // Check if artwork URL exists
+            const artworkUrl100Index = headerMap['artworkUrl100']; // Use artworkUrl100 for album art
 
             if (trackNameIndex === undefined || artistNameIndex === undefined || previewUrlIndex === undefined) {
                 console.error("CSV must contain 'trackName', 'artistName', and 'previewUrl' columns.");
@@ -679,14 +719,15 @@
                 const trackName = cleanValues[trackNameIndex];
                 const artistName = cleanValues[artistNameIndex];
                 let previewUrl = cleanValues[previewUrlIndex];
-                // Use actual artworkUrl100 if present, otherwise fall back to a placeholder
-                const artworkUrl100 = artworkUrlIndex !== undefined && cleanValues[artworkUrlIndex] ?
-                    cleanValues[artworkUrlIndex] :
-                    `https://placehold.co/100x100/764ba2/ffffff?text=${encodeURIComponent(artistName ? artistName[0] : '?')}`;
+                // Use actual artworkUrl100 if present and valid, otherwise fall back to a placeholder
+                let artworkUrl100 = artworkUrl100Index !== undefined && cleanValues[artworkUrl100Index] && cleanValues[artworkUrl100Index].startsWith('http') ?
+                    cleanValues[artworkUrl100Index] :
+                    `https://placehold.co/100x100/764ba2/ffffff?text=${encodeURIComponent(artistName ? artistName.charAt(0) : '?')}`;
+
 
                 // Basic validation for previewUrl. If missing or not a valid URL, set a placeholder.
                 if (!previewUrl || !previewUrl.startsWith('http')) {
-                    console.warn(`Missing or invalid previewUrl for song: ${trackName} by ${artistName} from CSV. Using a blank audio placeholder.`);
+                    console.warn(`Missing or invalid previewUrl for song: "${trackName}" by "${artistName}" from CSV. Using a blank audio placeholder.`);
                     previewUrl = 'data:audio/mpeg;base64,'; // A blank base64 audio string to avoid errors
                 }
 
@@ -745,9 +786,11 @@
         function nextRound() {
             // Check if all songs for the current difficulty have been played
             if (currentSongIndex >= songs.length) {
+                console.log('End of songs array. Calling endGame(). Current song index:', currentSongIndex, 'Total songs:', songs.length); // Debugging log
                 setTimeout(endGame, 500); // End game after a short delay
                 return;
             }
+            console.log('nextRound() called. Current Song Index:', currentSongIndex, 'Songs array length:', songs.length); // Debugging log
 
             // Clear previous feedback and options
             feedbackText.textContent = '';
@@ -760,6 +803,7 @@
             // Get the current song and its correct answer
             const currentSong = songs[currentSongIndex];
             correctAnswer = currentSong.trackName;
+            correctArtist = currentSong.artistName; // Store correct artist
 
             // Set audio player source and update album art
             audioPlayer.src = currentSong.previewUrl;
@@ -827,11 +871,13 @@
             const allButtons = optionsContainer.querySelectorAll('button');
             allButtons.forEach(button => button.disabled = true);
 
+            console.log('handleAnswer() called. Current Song Index BEFORE increment:', currentSongIndex); // Debugging log
+
             if (selectedAnswer === correctAnswer) {
                 selectedButton.classList.add('correct'); // Highlight correct choice
-                feedbackText.textContent = "Correct!";
-                feedbackText.classList.remove('text-red-400');
-                feedbackText.classList.add('text-green-400');
+                infoFeedbackText.textContent = "Correct!";
+                infoFeedbackText.classList.remove('text-red-400');
+                infoFeedbackText.classList.add('text-green-400');
 
                 // Calculate points based on difficulty and time left
                 const baseScore = gameSettings[difficulty].baseScore;
@@ -843,9 +889,9 @@
                 sfxCorrect.play(); // Play correct SFX
             } else {
                 if (selectedButton) selectedButton.classList.add('incorrect'); // Highlight incorrect choice
-                feedbackText.textContent = selectedAnswer ? "Wrong!" : "Time's up!"; // Set feedback message
-                feedbackText.classList.remove('text-green-400');
-                feedbackText.classList.add('text-red-400');
+                infoFeedbackText.textContent = selectedAnswer ? "Wrong!" : "Time's up!"; // Set feedback message
+                infoFeedbackText.classList.remove('text-green-400');
+                infoFeedbackText.classList.add('text-red-400');
                 // Highlight the correct answer if the user was wrong or timed out
                 allButtons.forEach(button => {
                     if (button.textContent === correctAnswer) button.classList.add('correct');
@@ -853,8 +899,17 @@
                 sfxWrong.play(); // Play wrong SFX
             }
 
-            currentSongIndex++; // Move to the next song
-            setTimeout(nextRound, 2000); // Proceed to the next round after a delay
+            currentSongIndex++; // Increment here
+            console.log('handleAnswer() called. Current Song Index AFTER increment:', currentSongIndex); // Debugging log
+
+
+            // Populate and show the song info overlay
+            infoSongTitle.textContent = correctAnswer;
+            infoArtistName.textContent = `by ${correctArtist}`;
+            songInfoOverlay.classList.remove('hidden');
+
+            // Do NOT call nextRound here. It will be called by clicking 'Next Song' button or after a delay.
+            // Removed direct setTimeout(nextRound, 2000)
         }
 
         function startTimer() {
